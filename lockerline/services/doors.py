@@ -3,9 +3,10 @@ The size and state filters arrive already validated (typed query parameters); `f
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..clock import Clock
+from ..clock import Clock, as_utc
 from ..errors import NoSuchDoor, NoSuchTower
-from ..models import Door, Tower
+from ..ids import parcel_public
+from ..models import Door, Parcel, Tower
 from ..schemas import DoorListItem, DoorOut, DoorsOut
 
 SIZES = ("S", "M", "L")
@@ -22,6 +23,9 @@ def door_state(door: Door) -> str:
     return "holding" if door.current_parcel_id is not None else "free"
 
 
+def _dwell(parcel: Parcel, clock: Clock) -> int:
+    return int((clock.now() - as_utc(parcel.dropped_at)).total_seconds())
+
 
 def list_doors(session: Session, tower_code: str, size: str | None, state: str | None, clock: Clock) -> DoorsOut:
     tower = get_tower(session, tower_code)
@@ -31,11 +35,16 @@ def list_doors(session: Session, tower_code: str, size: str | None, state: str |
     doors = list(session.scalars(query))
     if state is not None:
         doors = [d for d in doors if door_state(d) == state]
+    held_ids = [d.current_parcel_id for d in doors if d.current_parcel_id is not None]
+    parcels = {p.id: p for p in session.scalars(select(Parcel).where(Parcel.id.in_(held_ids)))} if held_ids else {}
     items = []
     for d in doors:
         item = DoorListItem(no=d.no, size=d.size_class, state=door_state(d))
+        if d.current_parcel_id is not None:
+            parcel = parcels[d.current_parcel_id]
+            item.parcel_id, item.dwell_seconds = parcel_public(parcel.id), _dwell(parcel, clock)
         items.append(item)
-    free = sum(1 for d in doors if d.current_parcel_id is None)       # of the doors shown, how many are free
+    free = sum(1 for d in doors if d.current_parcel_id is None)
     return DoorsOut(tower=tower.code, free=free, doors=items)
 
 
@@ -45,4 +54,13 @@ def get_door(session: Session, tower_code: str, no: str, clock: Clock) -> DoorOu
     if door is None:
         raise NoSuchDoor(f"There is no door {no!r} in tower {tower_code}")
     out = DoorOut(no=door.no, size=door.size_class, state=door_state(door))
+    if door.current_parcel_id is not None:
+        parcel = session.get(Parcel, door.current_parcel_id)
+        out.parcel_id, out.flat, out.dwell_seconds = parcel_public(parcel.id), parcel.flat, _dwell(parcel, clock)
     return out
+
+
+def free_sizes(session: Session, tower_id: int) -> list[str]:
+    rows = session.scalars(select(Door.size_class).where(Door.tower_id == tower_id, Door.current_parcel_id.is_(None)).distinct())
+    present = set(rows)
+    return [s for s in SIZES if s in present]
