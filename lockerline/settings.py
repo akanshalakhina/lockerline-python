@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field("sqlite:///./lockerline.db", min_length=1)
-    free_window_hours: int = Field(48, ge=1)                # the free window, in hours
+    free_window_hours: int = Field(48, ge=1)  # how long a pickup code stays valid
+    code_hash_key: str = Field("dev-only-change-me", min_length=1)  # keyed SHA-256 for pickup codes
     seed_dir: str = Field("seed", min_length=1)
-    host: str = Field("0.0.0.0", min_length=1)              # the address uvicorn binds
+    host: str = Field("0.0.0.0", min_length=1)  # the address uvicorn binds
     port: int = Field(8080, ge=1, le=65535)
