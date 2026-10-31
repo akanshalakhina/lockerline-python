@@ -63,3 +63,8 @@ class ParcelOut(BaseModel):
     size_class: SizeClass
     flat: str
     dropped_at: UtcZ
+
+
+class PickupIn(BaseModel):
+        code: str = Field(pattern=r"^\d{6}$")
+        
