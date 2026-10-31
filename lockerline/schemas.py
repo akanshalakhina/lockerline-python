@@ -68,3 +68,9 @@ class ParcelOut(BaseModel):
 class PickupIn(BaseModel):
         code: str = Field(pattern=r"^\d{6}$")
         
+
+class PickupOut(BaseModel):
+    parcel_id: str
+    door: str
+    opened_at: UtcZ
+    dwell_seconds: int

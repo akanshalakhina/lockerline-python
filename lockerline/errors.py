@@ -54,3 +54,7 @@ class NoSuchCode(DomainError):
 
 class CodeExpired(DomainError):
     status, type, title = 404, "/errors/code-expired", "This code has expired"
+
+
+class CodeUsed(DomainError):
+    status, type, title = 409, "/errors/code-used", "This code has already opened its door"
